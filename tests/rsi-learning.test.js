@@ -551,6 +551,85 @@ test("duplicate map IDs, refresh copies, plan revisions and copied report text n
 	assert.equal(independentSources([{ source_key: "plan:a", report_digest: "r1" }, { source_key: "plan:a", report_digest: "r2" }]), 1);
 });
 
+test("plan reports and observations bound to that plan remain one dependent source family", async () => {
+	const f = fixture();
+	const observation = observedTools(null);
+	observation.bindings.plans = [{ plan_id: "job", revision: f.plans.get("job").revision }];
+	f.artifacts.set(observation.id, observation);
+	const planned = await mine(f);
+	const observed = await f.learning.mine({ kind: "observations", source_ids: [observation.id] });
+	const result = await f.learning.reduce({ artifact_ids: [...mapIds(planned), ...mapIds(observed)] });
+	assert.equal(result.issues[0].independent_source_count, 1);
+	assert.equal(result.issues[0].counts.source_ids, 2);
+	assert.match(result.issues[0].source_count_meaning, /shared plan ancestry/);
+	assert.equal(independentSources([
+		{ source_key: "plan:a", report_digest: "a", source_family_keys: ["plan:a"] },
+		{ source_key: "observation:x", report_digest: "b", source_family_keys: ["plan:a", "plan:b"] },
+		{ source_key: "plan:b", report_digest: "c", source_family_keys: ["plan:b"] },
+	]), 1);
+});
+
+test("a no-witness assessment cannot count as observed support for policy edits", async () => {
+	const f = fixture({ answers: state => state.source ? { witness: "none" } : {} });
+	const mapped = await mine(f);
+	const feature = mapFeature(f.artifacts.get(mapped.receipts[0].id));
+	assert.equal(feature.model_evidence_status, "observed");
+	assert.equal(feature.evidence_status, "insufficient");
+	assert.equal(feature.witness, null);
+	const reduced = await f.learning.reduce({ artifact_ids: mapIds(mapped) });
+	assert.equal(reduced.issues[0].operation, "investigate");
+	assert.equal(reduced.issues[0].counts.evidence_status.observed, undefined);
+});
+
+test("contradicted sufficiency never normalizes into an actionable policy edit", async () => {
+	for (const operation of ["rewrite", "merge", "retire", "new-section"]) {
+		const f = fixture({ answers: state => state.group ? { sufficiency: "contradicted", operation, novelty: "uncovered" } : {} });
+		const mapped = await mine(f);
+		const result = await f.learning.reduce({ artifact_ids: mapIds(mapped) });
+		assert.equal(result.issues[0].sufficiency, "contradicted");
+		assert.equal(result.issues[0].operation, "investigate");
+		assert.match(result.issues[0].uncertainties.join(" "), /contradicts/);
+		assert.equal(result.issues[0].automatic_promotion, false);
+	}
+});
+
+test("weak or diffuse witness judgments remain insufficient even when model evidence_status is observed", async () => {
+	for (const mode of ["low-confidence", "diffuse-distribution"]) {
+		const f = fixture({ assess: (state, questions) => {
+			if (!state.source) return;
+			const a = answers(questions);
+			if (mode === "low-confidence") a.witness.confidence = 0.2;
+			else {
+				const keys = Object.keys(questions.witness.criteria);
+				a.witness.probabilities = Object.fromEntries(keys.map(key => [key, key === a.witness.choice ? 0.49 : 0.51 / (keys.length - 1)]));
+			}
+			return { status: "assessed", response: { model: "synthetic", answers: a } };
+		} });
+		const mapped = await mine(f);
+		const feature = mapFeature(f.artifacts.get(mapped.receipts[0].id));
+		assert.equal(feature.model_evidence_status, "observed");
+		assert.equal(feature.evidence_status, "insufficient");
+		assert.ok(feature.witness);
+		const result = await f.learning.reduce({ artifact_ids: mapIds(mapped) });
+		assert.equal(result.issues[0].operation, "investigate");
+	}
+});
+
+test("uncertain policy routing cannot emit rewrite even with optimistic selected choices", async () => {
+	for (const key of ["generality", "sufficiency", "destination", "operation", "target_section", "novelty"]) {
+		const f = fixture({ plans: [plan("one", "Outcome one"), plan("two", "Outcome two")], assess: (state, questions) => {
+			if (!state.group) return;
+			const a = answers(questions, { operation: key === "novelty" ? "new-section" : "rewrite", novelty: "uncovered" });
+			a[key].confidence = 0.2;
+			return { status: "assessed", response: { model: "synthetic", answers: a } };
+		} });
+		const mapped = await mine(f);
+		const result = await f.learning.reduce({ artifact_ids: mapIds(mapped) });
+		assert.equal(result.issues[0].operation, "investigate", key);
+		assert.match(result.issues[0].uncertainties.join(" "), /routing lacks/);
+	}
+});
+
 test("hierarchical insights re-read roots and dedup overlapping cohorts instead of counting prior judgments", async () => {
 	const f = fixture({ plans: [plan("a", "Distinct result A"), plan("b", "Distinct result B")] });
 	const mapped = await mine(f);

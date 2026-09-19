@@ -27,6 +27,7 @@ from agent_memory.rsi_store import RSIStore
 from agent_memory.rsi_corpus import corpus_page
 from agent_memory.rsi_lineage import LineageCheck, require_lineage
 from agent_memory.rsi_sections import apply_section_edits, revision_metrics, section_index
+from agent_memory.rsi_trials import TRIAL_KINDS, create_trial
 
 
 def _policy_lock(store):
@@ -167,6 +168,8 @@ def _record(store, request, actor):
     kind = request["kind"]
     if not isinstance(kind, str) or kind not in KINDS[1:]:
         raise ContractError("record kind must be " + ", ".join(KINDS[1:]))
+    if kind in TRIAL_KINDS:
+        raise ContractError("trial artifacts require trial_spec or trial_results; generic record cannot bypass protocol validation")
     record_id = f"{kind}-{uuid.uuid4().hex}"
     if "record_id" in request:
         record_id = identifier(request["record_id"], "record_id")
@@ -311,6 +314,10 @@ def execute_request(request, base, *, actor="unknown", no_git=False, allow_non_m
                     result = {"policy": policy, "sections": section_index(policy["body"])}
                 elif action == "corpus":
                     result = corpus_page(store, request)
+                elif action in ("trial_spec", "trial_results"):
+                    value = create_trial(store, request, actor, _plan)
+                    repo, paths = store.save(value)
+                    result = {"artifact": _export(store, value)}
                 elif action == "propose":
                     result, repo, paths = _propose(store, request, actor)
                 elif action == "record":
@@ -322,7 +329,7 @@ def execute_request(request, base, *, actor="unknown", no_git=False, allow_non_m
                 elif action == "list":
                     result = _list(store, request)
                 else:
-                    raise ContractError("action must be context, sections, corpus, propose, record, read, lookup, list, or promote")
+                    raise ContractError("action must be context, sections, corpus, propose, trial_spec, trial_results, record, read, lookup, list, or promote")
     if paths:
         result["persistence"] = {"saved": True, "git": store.publish(repo, paths)}
     return {"ok": True, "action": action, **result}
