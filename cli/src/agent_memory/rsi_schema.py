@@ -17,7 +17,7 @@ MAX_REQUEST_BYTES = 512 * 1024
 MAX_ARTIFACT_BYTES = 1024 * 1024
 MAX_PLAN_FILE_BYTES = 1024 * 1024
 MAX_PLAN_IDS = 8
-KINDS = ("proposal", "preflight", "evaluation", "reflection", "observation", "mapping", "insight")
+KINDS = ("proposal", "preflight", "evaluation", "reflection", "observation", "mapping", "insight", "audit", "trial_review", "trial-spec", "trial-results")
 MAX_ARTIFACT_REFS = 128
 PROVENANCE = (
     "Self-reported, unauthenticated provenance; model judgments are advisory, "

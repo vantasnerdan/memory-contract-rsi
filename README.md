@@ -114,6 +114,23 @@ source lineage cannot be promoted. Promotion retains history/rollback and never
 alters active plans or synchronizes instruction files implicitly. Actor labels are
 not approval. Unit and live smoke tests do not establish statistical improvement.
 
+### Instruction-stack audits and measured trials (0.5)
+
+Audit explicitly selected prompt/AGENTS/skill/template text together with canonical
+policy using `memory_rsi audit`; typed findings link exact source snapshots and
+preserve scope/authority uncertainty. No file discovery or automatic edits occur.
+Use `trial_spec` → `trial_results` → `trial_review` for immutable declared paired
+comparisons: fixed cases/environment, holdout/control splits, useful outcomes,
+separate safety/cost, and honest missingness. TypeSafe reviews reported measurements;
+neither a score nor a trial report proves causal improvement or authorizes promotion.
+
+Preflight retains capability-exception reviews, including rejection and pending
+status. Candidate recommendations now expose comparison coverage and quality
+concerns rather than treating uncertain/equivalent cases as candidate advantage.
+See the [API and measurement guide](docs/rsi-trials-and-instructions.md) and
+[ranked review/validation](docs/rsi-improvement-review.md). This release does not
+silently rewrite existing canonical policy, AGENTS, skills or pinned templates.
+
 ## Requirements
 
 - POSIX or Windows through WSL; native Windows setup is unsupported.

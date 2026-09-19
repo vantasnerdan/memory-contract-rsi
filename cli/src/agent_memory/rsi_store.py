@@ -20,6 +20,7 @@ from agent_memory.policy import (
 )
 from agent_memory.policy_git import commit_git, push_git
 from agent_memory.rsi_sections import apply_section_edits, revision_metrics
+from agent_memory.rsi_trials import TRIAL_KINDS, validate_trial_artifact
 from agent_memory.rsi_schema import (
     KINDS, MAX_ARTIFACT_BYTES, MAX_CONTEXT_BYTES, PROVENANCE,
     artifact_refs, artifact_revision, bindings, body, data_object, json_text, parse_json,
@@ -63,6 +64,8 @@ def validate_artifact(value):
     string(value["created_at"], "created_at", 128)
     string(value["created_by"], "created_by", 128)
     bound = bindings(value["bindings"])
+    if value["kind"] in TRIAL_KINDS:
+        return validate_trial_artifact(value)
     if value["kind"] != "proposal":
         data_object(value["data"])
         if value["kind"] == "evaluation" and "proposal_id" not in bound:
