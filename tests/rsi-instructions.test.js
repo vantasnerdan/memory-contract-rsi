@@ -129,7 +129,7 @@ function insight({ reviewed = true } = {}) {
 	}] } };
 }
 
-function stagedFixture({ systemBody = "System guidance.", complete = true, feedbackArtifact, answerOptions = {}, discoveryResult } = {}) {
+function stagedFixture({ systemBody = "System guidance.", complete = true, feedbackArtifact, answerOptions = {}, responseOptions = {}, discoveryResult } = {}) {
 	const records = [], assessed = [], operations = [];
 	let counter = 0;
 	const local = async (request, args) => {
@@ -148,7 +148,7 @@ function stagedFixture({ systemBody = "System guidance.", complete = true, feedb
 	};
 	const assess = async (state, questions) => {
 		operations.push({ kind: "assess" }); assessed.push(structuredClone(state));
-		return { status: "assessed", evaluator: { requested_model: "test" }, response: { model: "test", answers: stagedAnswers(questions, answerOptions), usage: { input_tokens: 10, output_tokens: 2 }, elapsedMs: 1 } };
+		return { status: "assessed", evaluator: { requested_model: "test" }, response: { model: "test", answers: stagedAnswers(questions, answerOptions), usage: { input_tokens: 10, output_tokens: 2 }, elapsedMs: 1, ...responseOptions } };
 	};
 	const audit = createInstructionAudit({ local, assess, discover: async () => discoveryResult ?? discovery(systemBody, complete) });
 	return { audit, records, assessed, operations };
@@ -174,6 +174,24 @@ test("automatic audit persists exact local snapshots before inference and maps e
 	assert.ok(f.assessed.every(state => !JSON.stringify(state).includes("/local/skill")));
 	const maps = f.records.filter(entry => entry.request.data.stage?.kind === "instruction-units");
 	assert.ok(maps.every(entry => entry.request.data.input.state.units.every(unit => !Object.hasOwn(unit, "body"))));
+});
+
+test("automatic audit exposes bounded distribution retry telemetry", async () => {
+	const f = stagedFixture({ responseOptions: { attempts: 2, distributionSumRetries: 1 } });
+	const result = await f.audit({}, {}, { agent: { id: "agent" } });
+	assert.equal(result.usage.network_attempts, result.usage.assessed_calls * 2);
+	assert.equal(result.usage.distribution_sum_retries, result.usage.assessed_calls);
+	assert.equal(result.usage.complete, true);
+	assert.ok(result.stages.every(stage => !Object.hasOwn(stage, "probabilities")));
+});
+
+test("automatic audit never emits unsafe cross-stage token totals", async () => {
+	const f = stagedFixture({ systemBody: "x".repeat(70000), responseOptions: { usage: { input_tokens: Number.MAX_SAFE_INTEGER, output_tokens: 0 } } });
+	const result = await f.audit({}, {}, { agent: { id: "agent" } });
+	assert.ok(result.usage.assessed_calls >= 2);
+	assert.equal(result.usage.input_tokens, Number.MAX_SAFE_INTEGER);
+	assert.equal(Number.isSafeInteger(result.usage.input_tokens), true);
+	assert.equal(result.usage.complete, false);
 });
 
 test("provider path-like identifiers stay local while remote units use opaque IDs", async () => {

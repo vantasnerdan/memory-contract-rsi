@@ -115,6 +115,8 @@ test("typed POST uses only configured endpoint, model, state and questions; retu
 	assert.equal(calls, 1);
 	assert.deepEqual({ model: result.model, answers: result.answers, usage: result.usage }, original);
 	assert.ok(Number.isFinite(result.elapsedMs) && result.elapsedMs >= 0);
+	assert.equal(result.attempts, 1);
+	assert.equal(result.distributionSumRetries, 0);
 	assert.equal(result.answers.supported.noul, 0.5); // Uncertainty is not silently turned into a boolean.
 });
 
@@ -286,7 +288,7 @@ for (const [name, mutate] of Object.entries(malformedResponses)) test(`rejects m
 	const replacement = mutate(clone);
 	let calls = 0;
 	await assert.rejects(evaluateTypesafe(request, {}, options(async () => { calls++; return jsonResponse(replacement === undefined ? clone : replacement); })), code("TYPESAFE_RESPONSE_INVALID"));
-	assert.equal(calls, 1); // Protocol failures must not retry.
+	assert.equal(calls, name === "distribution not normalized" ? 2 : 1); // Only the observed intermittent sum defect is retryable.
 });
 
 const diagnosticCases = {
@@ -315,6 +317,71 @@ for (const [reason, mutate] of Object.entries(diagnosticCases)) test(`safe stati
 		assert.equal(error.validation_code, `TYPESAFE_INVALID_${reason}`);
 		assert.equal(error.message, "Typesafe returned an invalid typed response");
 		assert.deepEqual(Object.keys(error).sort(), ["code", "name", "validation_code"]);
+		return true;
+	});
+	assert.equal(calls, reason === "DISTRIBUTION_SUM" ? 2 : 1);
+});
+
+test("distribution-sum defects retry once, preserve the request, and account for both paid attempts", async () => {
+	const request = mixedRequest();
+	const invalid = mixedResponse(request);
+	invalid.answers.route.probabilities.review = 0.7;
+	invalid.usage = { input_tokens: 91, output_tokens: 33 };
+	const valid = mixedResponse(request);
+	let calls = 0, firstBody;
+	const result = await evaluateTypesafe(request, {}, options(async (_url, init) => {
+		calls++;
+		if (calls === 1) {
+			firstBody = init.body;
+			return jsonResponse(invalid);
+		}
+		assert.equal(init.body, firstBody);
+		return jsonResponse(valid);
+	}));
+	assert.equal(calls, 2);
+	assert.equal(result.attempts, 2);
+	assert.equal(result.distributionSumRetries, 1);
+	assert.deepEqual(result.answers, valid.answers);
+	assert.deepEqual(result.usage, { input_tokens: 178, output_tokens: 64 });
+	assert.ok(result.elapsedMs >= 200);
+});
+
+test("retry usage aggregation refuses unsafe integer overflow", async () => {
+	const request = mixedRequest();
+	const invalid = mixedResponse(request);
+	invalid.answers.route.probabilities.review = 0.7;
+	invalid.usage = { input_tokens: Number.MAX_SAFE_INTEGER, output_tokens: 0 };
+	let calls = 0;
+	await assert.rejects(evaluateTypesafe(request, {}, options(async () => {
+		calls++;
+		return jsonResponse(calls === 1 ? invalid : mixedResponse(request));
+	})), error => {
+		code("TYPESAFE_RESPONSE_INVALID")(error);
+		assert.equal(error.validation_code, "TYPESAFE_INVALID_RESPONSE_SHAPE");
+		return true;
+	});
+	assert.equal(calls, 2);
+});
+
+test("distribution-sum retry remains one even when the shared retry cap is larger", async () => {
+	const value = mixedResponse();
+	value.answers.route.probabilities.review = 0.7;
+	let calls = 0;
+	await assert.rejects(evaluateTypesafe(mixedRequest(), { typesafeRetries: 3 }, options(async () => { calls++; return jsonResponse(value); })), error => {
+		code("TYPESAFE_RESPONSE_INVALID")(error);
+		assert.equal(error.validation_code, "TYPESAFE_INVALID_DISTRIBUTION_SUM");
+		return true;
+	});
+	assert.equal(calls, 2);
+});
+
+test("zero retries leaves distribution-sum validation fail-closed", async () => {
+	const value = mixedResponse();
+	value.answers.route.probabilities.review = 0.7;
+	let calls = 0;
+	await assert.rejects(evaluateTypesafe(mixedRequest(), { typesafeRetries: 0 }, options(async () => { calls++; return jsonResponse(value); })), error => {
+		code("TYPESAFE_RESPONSE_INVALID")(error);
+		assert.equal(error.validation_code, "TYPESAFE_INVALID_DISTRIBUTION_SUM");
 		return true;
 	});
 	assert.equal(calls, 1);
@@ -426,6 +493,8 @@ for (const status of [429, 529, 502, 503, 504]) test(`retryable HTTP ${status} b
 	assert.equal(calls, 2); assert.equal(cancellations, 1);
 	assert.equal(signals[0], signals[1]); assert.equal(bodies[0], bodies[1]);
 	assert.ok(result.elapsedMs >= 200);
+	assert.equal(result.attempts, 2);
+	assert.equal(result.distributionSumRetries, 0);
 });
 
 test("exhausted transient response stops at configured total attempts with only numeric status", async () => {

@@ -277,7 +277,7 @@ can set explicit overrides in its `cordis.patch.yml`; do not add a duplicate plu
 | `rsiInstructionDiscoveryEnabled` | Separate opt-in for no-source prompt/AGENTS/skill discovery; default `false` |
 | `typesafeEndpoint`, `typesafeModel` | Dedicated HTTPS System One endpoint and Jev model; defaults `https://api.typesafe.ai/v1/systemone`, `jev-latest` |
 | `typesafeApiKeyEnv` | Host credential/environment reference; default `TYPESAFE_API_KEY`; never the secret value |
-| `typesafeTimeoutMs`, `typesafeRetries` | Total inference budget/retry cap; defaults 20000 ms / 1 |
+| `typesafeTimeoutMs`, `typesafeRetries` | Total inference budget/retry cap; defaults 20000 ms / 1. The shared cap covers transient HTTP responses and the observed intermittent `DISTRIBUTION_SUM` typed-response defect; all other malformed responses fail immediately. |
 | `typesafeMaxRequestBytes`, `typesafeMaxResponseBytes` | Bounded transport; defaults 131072 / 262144 |
 
 ## Graph-only GitNexus

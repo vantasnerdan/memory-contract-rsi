@@ -24,6 +24,8 @@ No admitted source body is prefix-clipped. System members retain `renderPrompt`'
 
 Automatic audits force `no_git`, generate `local-audit-*` IDs, and install a narrow `shared/efforts/.gitignore` rule before the first raw snapshot. Later generic `memory_sync` therefore cannot stage them. Every raw chunk and map stays below the 128 KiB durable-record envelope; configured transport limits are enforced before HTTP inference. Admission, route, stage or assessment incompleteness blocks synthesis and proposals rather than clipping evidence into a pass.
 
+TypeSafe Choice/Score distributions remain strictly validated and are never normalized locally. The configured retry cap is shared by retryable HTTP statuses and the observed intermittent `TYPESAFE_INVALID_DISTRIBUTION_SUM` provider response. Only that exact typed-response defect receives a bounded retry; unrelated malformed responses fail immediately. Successful audit usage reports logical stage calls, actual network attempts and distribution-sum retries, and aggregates token usage from every paid typed-response attempt.
+
 ### Feedback-grounded improvement
 
 Structural coherence is not an outcome signal. `feedback_ids` must name exact fresh `insight` or `trial_review` artifacts; automatic audits never sweep the memory corpus. Observations and plans first pass through `mine` → `reduce`, which preserves evidence status, conservative source-family independence, omissions, success/failure strata and counterevidence.
