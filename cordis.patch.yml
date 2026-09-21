@@ -33,6 +33,9 @@
         # Opt in only after reviewing policy/contract disclosure to TypeSafe.
         # Jev uses a typed decision API, not an OpenAI chat model entry.
         typesafeEnabled: false
+        # Separate opt-in: no-source audits may discover and disclose the invoking
+        # agent's assembled prompt, configured AGENTS-like files, and active skills.
+        rsiInstructionDiscoveryEnabled: false
         # Local metadata-only signal capture; explicit observe persists, mine discloses.
         rsiTelemetryEnabled: false
         rsiLearningTimeoutMs: 300000

@@ -18,6 +18,8 @@ Options:
   --python COMMAND        Python 3.10+ with venv (default python3)
   --runtime-dir PATH      Private dependencies (default DSH_HOME/plugins/memory-rsi/runtime)
   --instruction-file PATH Managed policy target; repeat (default DSH_HOME/AGENTS.md)
+  --enable-instruction-discovery  Consent to bounded prompt/AGENTS/skill discovery for no-source audits
+  --disable-instruction-discovery Revoke automatic instruction discovery consent
   --no-instructions       Do not sync instruction files in this invocation
   --no-gitnexus           Explicit memory-only setup; report graph not provisioned
   --no-git                File-only initialization, without a memory Git repository
@@ -33,11 +35,18 @@ Package import never installs software. GitNexus is pinned and graph-only; embed
 are never generated. Migration never copies credentials, sessions or provider config.
 `;
 
+export function instructionDiscoverySetting(values, previous = {}) {
+	if (values["enable-instruction-discovery"] && values["disable-instruction-discovery"]) throw new Error("Choose only one of --enable-instruction-discovery or --disable-instruction-discovery");
+	if (values["enable-instruction-discovery"]) return true;
+	if (values["disable-instruction-discovery"]) return false;
+	return previous.rsiInstructionDiscoveryEnabled ?? false;
+}
+
 export async function main(argv = process.argv.slice(2)) {
 	const { values } = parseArgs({ args: argv, options: {
 		profile: { type: "string", default: "web" }, base: { type: "string" }, "agent-id": { type: "string" }, python: { type: "string" },
 		"runtime-dir": { type: "string" }, "instruction-file": { type: "string", multiple: true },
-		"no-instructions": { type: "boolean" }, "no-gitnexus": { type: "boolean" }, "no-git": { type: "boolean" }, "no-profile": { type: "boolean" },
+		"enable-instruction-discovery": { type: "boolean" }, "disable-instruction-discovery": { type: "boolean" }, "no-instructions": { type: "boolean" }, "no-gitnexus": { type: "boolean" }, "no-git": { type: "boolean" }, "no-profile": { type: "boolean" },
 		status: { type: "boolean" }, "codex-home": { type: "string" }, "memory-dir": { type: "string", multiple: true },
 		"apply-migration": { type: "string" }, yes: { type: "boolean", short: "y" }, help: { type: "boolean", short: "h" },
 	} });
@@ -51,6 +60,7 @@ export async function main(argv = process.argv.slice(2)) {
 		runtimeDir: values["runtime-dir"] ? resolve(values["runtime-dir"]) : previous.runtimeDir,
 		bootstrapPython: values.python || previous.bootstrapPython || "python3",
 		instructionFiles: values["instruction-file"]?.map(path => resolve(path)) ?? previous.instructionFiles ?? [join(dshHome(), "AGENTS.md")],
+		rsiInstructionDiscoveryEnabled: instructionDiscoverySetting(values, previous),
 	};
 	const config = runtimeConfig(selected);
 	if (values.status) { console.log(JSON.stringify(await setupStatus(config, { noGit: values["no-git"] }), null, 2)); return; }

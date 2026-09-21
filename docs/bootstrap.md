@@ -76,7 +76,7 @@ node bin/setup.js --profile web --status             # read-only diagnostics
 node bin/setup.js --profile web --yes               # explicit setup/update
 ```
 
-Useful options include `--python COMMAND`, `--runtime-dir PATH`, repeatable `--instruction-file PATH`, and `--no-instructions` to skip instruction synchronization for that invocation. `--no-profile` provisions backends without changing a DSH profile. `--no-git` selects file-only memory initialization, not Git persistence.
+Useful options include `--python COMMAND`, `--runtime-dir PATH`, repeatable `--instruction-file PATH`, and `--no-instructions` to skip instruction synchronization for that invocation. `--enable-instruction-discovery` is separate disclosure consent: no-source audits may collect bounded rendered prompt, configured AGENTS-like, and active model-invocable skill text; remote assessment still separately requires `typesafeEnabled`. Revoke that consent with `--disable-instruction-discovery`; passing both flags fails without changing the profile. `--no-profile` provisions backends without changing a DSH profile. `--no-git` selects file-only memory initialization, not Git persistence.
 
 `--no-gitnexus` intentionally skips graph provisioning. A fresh memory-only installation is **not fully graph-ready**; this flag does not remove an existing GitNexus installation or index. Rerun without it when graph tools are wanted.
 

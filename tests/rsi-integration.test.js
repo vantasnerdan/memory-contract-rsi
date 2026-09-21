@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { apply } from "../lib/index.js";
@@ -132,4 +132,65 @@ test("real CLI learns selected session evidence and links a whole-section propos
 	assert.equal((await call("memory_plan", "read", { plan_id: "learning" })).revision, created.revision);
 	assert.equal((await call("memory_policy", "read")).revision, prep.policy.revision);
 	assert.equal((await call("memory_rsi", "clear_signals")).persisted_artifacts_removed, false);
+});
+
+test("registered default audit discovers live prompt, configured AGENTS and active skills without applying edits", async t => {
+	const base = mkdtempSync(join(tmpdir(), "rsi-auto-audit-"));
+	t.after(() => rmSync(base, { recursive: true, force: true }));
+	const instructionFile = join(base, "AGENTS.md");
+	writeFileSync(instructionFile, "Project guidance: run focused verification.\n");
+	const tools = new Map(), promptSections = [], sent = [];
+	const originalFetch = globalThis.fetch;
+	t.after(() => { globalThis.fetch = originalFetch; });
+	globalThis.fetch = async (_url, options) => { const body = JSON.parse(options.body); sent.push(body); return fakeResponse(body.questions); };
+	const skills = {
+		async snapshot(options) { assert.equal(options.scope.id, "audit-session"); return { complete: true, skills: [{ name: "review", description: "Review guidance", invocation: { modelInvocable: true, userInvocable: true }, source: "runtime", provider: "fixture" }] }; },
+		async get(name) { return { name, description: "Review guidance", invocation: { modelInvocable: true, userInvocable: true }, source: "runtime", provider: "fixture", content: "Inspect ownership before proposing edits.", path: join(base, "skills/review/SKILL.md") }; },
+	};
+	const systemPrompt = {
+		section(section) { promptSections.push(section); },
+		async assemble() { return { sections: [{ name: "persona", text: "System guidance: preserve authority." }, ...promptSections.map(section => ({ name: section.name, text: typeof section.text === "function" ? section.text() : section.text }))], contexts: [{ name: "sandbox:policy", text: "Workspace write." }], tools: [], variables: {} }; },
+	};
+	apply({
+		tools: { register: tool => tools.set(tool.name, tool) }, systemPrompt,
+		get: name => name === "tools" ? { get: toolName => tools.get(toolName) ?? (toolName === "read" ? { name: "read" } : undefined) }
+			: name === "skills" ? skills
+				: name === "credentials" ? { resolve: async () => ({ value: "mock-key" }), describe: async () => ({ configured: true }) }
+					: undefined,
+	}, { base, memoryBin: "/no-memory-executable", pythonBin: "python3", instructionFiles: [instructionFile], timeoutMs: 10000, typesafeEnabled: true, rsiInstructionDiscoveryEnabled: true });
+	const exec = { agent: { id: "audit-session", session: { header: { cwd: base } } }, signal: new AbortController().signal };
+	const call = async (name, action, request = {}, noGit = true) => JSON.parse((await tools.get(name).execute({ action, request: JSON.stringify(request), no_git: noGit }, exec)).result);
+	const before = await call("memory_policy", "read");
+	const audit = await call("memory_rsi", "audit", {}, false);
+	const after = await call("memory_policy", "read");
+	assert.equal(audit.discovery.complete, true, JSON.stringify(audit.discovery));
+	assert.deepEqual(audit.discovery.requested_classes, ["system", "agents", "skill"]);
+	assert.equal(audit.proposal_guidance.automatic_apply, false);
+	assert.equal(audit.publication.mode, "local-only");
+	assert.equal(audit.receipt.persistence.git.status, "disabled");
+	assert.equal(audit.receipt.persistence.git.committed, false);
+	assert.equal(audit.receipt.persistence.git.pushed, false);
+	assert.equal(audit.receipt.persistence.local_only.pattern, "/rsi-local-audit-*.md");
+	assert.match(audit.receipt.id, /^local-audit-/);
+	assert.equal(readFileSync(join(base, "shared/efforts/.gitignore"), "utf8"), "/rsi-local-audit-*.md\n");
+	assert.equal(after.revision, before.revision);
+	assert.equal(readFileSync(instructionFile, "utf8"), "Project guidance: run focused verification.\n");
+	assert.ok(sent.length >= 1 && sent.length <= 12);
+	const remotelyAssessed = sent.flatMap(call => call.state.units ?? []).map(unit => unit.body).join("\n");
+	assert.match(remotelyAssessed, /preserve authority/);
+	assert.match(remotelyAssessed, /focused verification/);
+	assert.match(remotelyAssessed, /Inspect ownership/);
+	assert.equal(audit.coverage.content_mapping_complete, true);
+	assert.equal(audit.coverage.whole_instruction_stack_reviewed, false);
+	assert.equal(audit.interpretation.disposition, "needs-outcome-evidence");
+	assert.doesNotMatch(JSON.stringify(sent), new RegExp(base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+	const persisted = await call("memory_rsi", "read", { id: audit.receipt.id });
+	assert.equal(persisted.artifact.data.discovery.local_details.includes("capture manifest"), true);
+	const captureManifest = await call("memory_rsi", "read", { id: audit.capture.manifest.id });
+	assert.equal(captureManifest.artifact.data.discovery.routes[1].targets[0].path, instructionFile);
+	const effortDir = join(base, "shared/efforts");
+	const localAudits = readdirSync(effortDir).filter(name => /^rsi-local-audit-.*\.md$/u.test(name));
+	assert.ok(localAudits.length >= audit.capture.snapshots.length + audit.stages.length + 2);
+	assert.ok(localAudits.every(name => statSync(join(effortDir, name)).size <= 128 * 1024));
+	assert.ok(audit.capture.snapshots.every(snapshot => snapshot.id.startsWith("local-audit-")));
 });

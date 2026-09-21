@@ -2,28 +2,59 @@
 
 These mechanisms support reward-shaped guidance: reward useful outcomes and evidence-led synthesis, not calls, length, model scores or automatic permissions. They do not train model weights. They do not automatically modify a policy, prompt, AGENTS file, skill or template.
 
-## Audit the selected instruction stack
+## Audit the current instruction stack
+
+Automatic discovery has a separate operator consent because it can disclose prompt, instruction-file and skill text to the configured TypeSafe endpoint. Enable both `typesafeEnabled` and `rsiInstructionDiscoveryEnabled` in the Host plugin configuration, then omit `sources`:
+
+```js
+memory_rsi({action: "audit", request: JSON.stringify({
+  plan_id: "my-plan",                 // optional pinned contract
+  feedback_ids: ["insight-..."]       // optional, explicit immutable selections
+})})
+```
+
+The invoking Agent is required. The current-scope capture contains:
+
+- rendered system-prompt sections (`renderPrompt` semantics), excluding runtime-context user snapshots, tools and live Agent objects;
+- unmanaged text from operator-configured `instructionFiles`; memory-rsi managed policy mirrors are excluded and remain owned by `memory_policy sync`;
+- the complete effective catalog of model-invocable skills for the Agent scope/workspace. An incomplete skill catalog is omitted rather than assessed as complete;
+- canonical policy, included separately as `canonical-policy`.
+
+No admitted source body is prefix-clipped. System members retain `renderPrompt`'s exact blank-line join bytes; managed/canonical mirror exclusions are explicit and their content is represented once by the separate canonical-policy member. Skill bodies are the exact active `skill.content` returned by the public registry—description/activation metadata is not synthesized into the body. Each member is stored as exact, gapless UTF-8 chunks in local-only `audit` artifacts **before** remote inference. A local capture manifest binds chunk order, byte ranges, hashes, source revisions and owner routes. Remote map/synthesis requests and ordinary tool results use opaque member/unit IDs; raw provider identifiers and routes exist only in snapshot/capture artifacts opened explicitly. Remote requests receive only complete members/chunks, opaque/path-free provider metadata, optional explicitly selected feedback and typed witness choices. Separately collected local routes, owner names, provider path metadata, provider error details, tool arguments/output, arbitrary transcript history, credentials and live objects stay local. Because instruction bodies are transmitted exactly after explicit discovery consent, paths written inside those bodies are part of the disclosed text and are not redacted. A chunk judgment remains chunk-local; multi-chunk members are `mapped-full-content`, not declared coherent as a whole. `whole_instruction_stack_reviewed` remains false unless relationship comparison is genuinely exhaustive.
+
+Automatic audits force `no_git`, generate `local-audit-*` IDs, and install a narrow `shared/efforts/.gitignore` rule before the first raw snapshot. Later generic `memory_sync` therefore cannot stage them. Every raw chunk and map stays below the 128 KiB durable-record envelope; configured transport limits are enforced before HTTP inference. Admission, route, stage or assessment incompleteness blocks synthesis and proposals rather than clipping evidence into a pass.
+
+### Feedback-grounded improvement
+
+Structural coherence is not an outcome signal. `feedback_ids` must name exact fresh `insight` or `trial_review` artifacts; automatic audits never sweep the memory corpus. Observations and plans first pass through `mine` → `reduce`, which preserves evidence status, conservative source-family independence, omissions, success/failure strata and counterevidence.
+
+Feedback classes have different force:
+
+- root tool-dispatch telemetry is metadata only; it does not include arguments/output or establish task failure;
+- explicit `observe.context_note` steering is an unreviewed agent-selected summary, not transcript capture or independent evidence;
+- plan test/MR/task reports carry their recorded review state, but references are strings—the audit does not open them;
+- reduced insights are source-linked hypotheses, never new independent votes;
+- paired trial reviews are caller-reported corroboration and cannot independently unlock an instruction change.
+
+A proposal requires complete content mapping, one exact instruction witness, one exact eligible feedback issue, two distinct reviewed+observed plan sources, reviewed+observed opposing counterevidence, no material unresolved uncertainty, and a plausible mechanism judgment. Tool metadata/user steering alone, unrelated eligible issues, missing witness spans, incomplete strata or trial-only support yields `investigate` or no change. Results route only outcome-supported candidates to the actual owner: canonical policy (`memory_policy`), managed mirrors (`memory_policy sync`), external AGENTS text (file owner), system sections (provider/composition owner), and skills (skill/provider owner). Structural findings remain review notes. Every route is `explicit-review-only`; auditing never applies edits.
+
+### Explicit custom snapshots
+
+The original explicit path remains available and does not call discovery services or read configured files:
 
 ```js
 memory_rsi({action: "audit", request: JSON.stringify({
   sources: [
     {id: "host-guidance", kind: "system", scope: "selected host contribution", body: "...explicitly selected text..."},
     {id: "project-guidance", kind: "agents", scope: "this repository", body: "..."},
-    {id: "coding-skill", kind: "skill", scope: "selected coding work", body: "..."},
-    {id: "coding-template", kind: "template", scope: "selected coding contract", body: "..."}
-  ],
-  plan_id: "my-plan" // optional; includes the pinned contract and exception reviews
+    {id: "coding-skill", kind: "skill", scope: "selected coding work", body: "..."}
+  ]
 })})
 ```
 
-- Select **1–5 text sources**. Kinds: `system`, `agents`, `skill`, `template`, `memory`. Canonical policy is included automatically as `canonical-policy` (reserved ID).
-- Each source has exactly `id`, `kind`, `scope`, `body`. IDs are unique, bounded identifiers; scope is a short declared applicability statement. Bodies have the existing 32,768-codepoint bound; the combined snapshot has a 64 KiB technical byte budget. Oversized selections fail explicitly, not by silently clipping instructions.
-- No path is dereferenced and no prompt/history is captured. Review selected content before disclosure to the configured, opt-in TypeSafe endpoint.
-- Exact source bodies and content hashes are retained with the canonical policy/plan revisions. Kind and scope are **caller declarations**, not authenticated runtime priority. Source snapshots are not monitored for later filesystem changes; reselect/re-audit after editing them.
-- Typed questions inspect each source and each selected pair for contradictions, redundant guidance, misplaced detail, complementary guidance and legitimate scope differences. Optional plan checking considers the selected layers. Findings link exact source snapshots, not fabricated quotes or claims to inspect unseen layers.
-- Low confidence, ambiguous distributions and unknown scope remain uncertain. “No issue detected in selection” does not mean the entire instruction stack is conflict-free.
+Select **1–5 sources** of kind `system`, `agents`, `skill`, `template` or `memory`. Each has exactly `id`, `kind`, `scope`, `body`; bodies are bounded to 32,768 codepoints and the combined snapshot to 64 KiB. Kind/scope are caller declarations, not authenticated authority. No supplied path is followed.
 
-Resolve authority/scope before wording. Prefer a coherent replacement, merge or retirement with one maintained owner; do not paste another incident-specific instruction into every layer. Edits to canonical policy, owner-managed system prompts/AGENTS, skills and pinned templates use their separate version/review mechanisms. Auditing cannot weaken active plans or platform boundaries.
+Typed questions inspect each source and pair for contradictions, redundant guidance, misplaced detail, complementary guidance and legitimate scope differences. Low confidence and unknown scope remain uncertain. Resolve authority before wording; prefer one small replacement, merge or retirement, or recommend no change. Never paste another incident-specific rule into every layer or use an audit to weaken plans/platform boundaries.
 
 ## Register a trial before recording results
 

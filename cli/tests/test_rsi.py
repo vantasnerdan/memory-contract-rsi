@@ -1,6 +1,7 @@
 """RSI lifecycle, immutable provenance, lossless boundaries, and stale source tests."""
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -110,6 +111,29 @@ def test_record_lossless_owned_state_and_missing_evaluation_binding(api):
     assert api({"action": "read", "id": result["artifact"]["id"]})["artifact"]["data"] == data
     with pytest.raises(ContractError, match="requires proposal"):
         api({"action": "record", "kind": "evaluation", "bindings": bindings, "data": data})
+
+
+def test_local_only_audit_is_ignored_by_later_add_all(api, tmp_path):
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    ignore = tmp_path / "shared" / "efforts" / ".gitignore"
+    ignore.parent.mkdir(parents=True)
+    ignore.write_text("/rsi-local-audit-*.md\n!/rsi-local-audit-*.md\n")
+    result = api({"action": "record", "kind": "audit", "local_only": True,
+                  "bindings": bound(context(api)), "data": {"publication": {"mode": "local-only"}, "secret": "prompt snapshot"}})
+    artifact = Path(result["artifact"]["path"])
+    assert result["artifact"]["id"].startswith("local-audit-")
+    assert result["persistence"]["local_only"]["pattern"] == "/rsi-local-audit-*.md"
+    assert ignore == artifact.parent / ".gitignore"
+    assert ignore.read_text() == "!/rsi-local-audit-*.md\n/rsi-local-audit-*.md\n"
+    relative = artifact.relative_to(tmp_path)
+    assert subprocess.run(["git", "check-ignore", "--quiet", str(relative)], cwd=tmp_path).returncode == 0
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=tmp_path, check=True, capture_output=True, text=True).stdout.splitlines()
+    assert str(relative) not in staged
+    assert str(ignore.relative_to(tmp_path)) in staged
+    with pytest.raises(ContractError, match="reserved for no-git"):
+        execute_request({"action": "record", "kind": "audit", "local_only": True,
+                         "bindings": bound(context(api)), "data": {}}, tmp_path, no_git=False)
 
 
 def test_preview_apply_history_and_rollback_preserve_plan(api, tmp_path):

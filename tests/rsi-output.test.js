@@ -55,6 +55,24 @@ test("large preparation retains insight/section identities and small results sta
 	assert.equal(prepared.network_called, false);
 });
 
+test("large staged audit output keeps coverage, receipts and counts without repeating witness bodies", () => {
+	const original = { status: "partial", coverage: { content_mapping_complete: true, synthesis_required: true, synthesis_assessed: false, audit_complete: false, covered_bytes: 999 },
+		capture: { capture_revision: revision, manifest: { id: "capture", revision, persistence: { saved: true, git: { status: "disabled" } } }, snapshots: Array(40).fill({ id: "snapshot", revision }) },
+		stages: [{ id: "stage", revision, status: "assessed", stage: { kind: "instruction-units", index: 0, count: 1 }, units: [{ source_id: "source", byte_start: 0, byte_end: 999 }] }],
+		synthesis: { status: "unavailable", error_code: "RSI_INPUT_BUDGET", interpretation: { disposition: "investigate" }, receipt: { id: "synthesis", revision } },
+		interpretation: { disposition: "investigate", change_review_supported: false, automatic_apply: false, findings: Array.from({ length: 40 }, () => ({ witness: verbose })), uncertain: [], outcome_supported_candidates: [] },
+		proposal_guidance: { automatic_apply: false, proposals: [] }, receipt: { id: "final", revision, persistence: { saved: true, git: { status: "disabled" } } } };
+	const encoded = rsiOutput(original), result = JSON.parse(encoded);
+	assert.ok(encoded.length < 90000);
+	assert.equal(result.coverage.audit_complete, false);
+	assert.equal(result.capture.manifest.id, "capture");
+	assert.equal(result.stages[0].id, "stage");
+	assert.equal(result.synthesis.error_code, "RSI_INPUT_BUDGET");
+	assert.equal(result.interpretation.counts.findings, 40);
+	assert.equal(result.interpretation.findings, undefined);
+	assert.equal(result.receipt.id, "final");
+});
+
 test("compaction preserves safe failure codes and projection/usage coverage", () => {
 	const source = { id: "selected", projection_version: "projection/2", projection_modes: ["telemetry-report-units"], source_reviewed_in_full: false, projection_exclusions_present: true };
 	const usage = { input_tokens: 4, output_tokens: 0, complete: false, unavailable_calls: 1, unknown_usage_calls: 1, scope: "Validated subtotals only" };

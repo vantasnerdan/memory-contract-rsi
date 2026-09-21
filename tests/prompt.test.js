@@ -78,3 +78,22 @@ test("DSH forwarding preserves duplicate JSON fields for strict rejection", asyn
 	await assert.rejects(tools.get("memory_policy").execute({ action: "update", request: '{"body":"reviewed","body":"different"}', no_git: true }, { signal: new AbortController().signal }), /Duplicate JSON field/);
 	await assert.rejects(tools.get("memory_plan").execute({ action: "read", request: '{"plan_id":"one","plan_id":"two"}' }, { signal: new AbortController().signal }), /duplicate JSON key/);
 });
+
+test("prompt asks agents to ground proactive audits in complete sources and observed feedback", t => {
+	const base = fixture(t);
+	const prompt = memoryPrompt({ base, rsiInstructionDiscoveryEnabled: true });
+	assert.match(prompt, /Instruction coherence is structural context, not recursive improvement evidence/);
+	assert.match(prompt, /observe or reviewed plan outcomes with reflect/);
+	assert.match(prompt, /every admitted system-prompt, configured AGENTS-like and active model-invocable skill member/);
+	assert.match(prompt, /Tool dispatch metadata and user-steering summaries alone.*cannot justify a policy change/);
+	assert.match(prompt, /no raw transcript, tool argument\/output or chain-of-thought/);
+	assert.match(prompt, /Missing coverage or weak evidence means investigate\/no-change/);
+	assert.match(prompt, /Promotion remains explicit/);
+});
+
+test("prompt does not imply discovery occurred before separate operator consent", t => {
+	const prompt = memoryPrompt({ base: fixture(t), rsiInstructionDiscoveryEnabled: false });
+	assert.match(prompt, /Automatic instruction discovery is disabled/);
+	assert.doesNotMatch(prompt, /Proactively run memory_rsi audit with no sources/);
+	assert.match(prompt, /explicitly selected source bodies/);
+});

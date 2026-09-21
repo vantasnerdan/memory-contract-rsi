@@ -135,12 +135,15 @@ def render_artifact(value):
 
 
 class RSIStore:
+    LOCAL_AUDIT_IGNORE = "/rsi-local-audit-*.md"
+
     def __init__(self, base, *, no_git=False, allow_non_main_branch=False):
         self.contracts = ContractStore(base, no_git=no_git, allow_non_main_branch=allow_non_main_branch)
         self.policy = ContainedPolicyStore(self.contracts)
         self.no_git = no_git
         self.allow_non_main_branch = allow_non_main_branch
         self.publication = None
+        self.local_protection = None
 
     def path(self, entry_id):
         identifier(entry_id)
@@ -174,6 +177,36 @@ class RSIStore:
 
     def prepare(self, paths):
         return _git_prepare(self.contracts.base, self.no_git, self.allow_non_main_branch, paths)
+
+    def protect_local_audits(self):
+        """Install a narrow directory-local ignore before sensitive artifacts exist."""
+        directory = self.path("local-audit-probe").parent
+        self.contracts._safe(directory).mkdir(parents=True, exist_ok=True)
+        ignore = self.contracts._safe(directory / ".gitignore")
+        if ignore.exists():
+            if not ignore.is_file() or ignore.stat().st_size > 64 * 1024:
+                raise ContractError("local-audit ignore file is not a bounded regular file")
+            try:
+                current = ignore.read_bytes().decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ContractError("local-audit ignore file is not valid UTF-8") from exc
+        else:
+            current = ""
+        kept = [line for line in current.splitlines(keepends=True)
+                if line.rstrip("\r\n") != self.LOCAL_AUDIT_IGNORE]
+        prefix = "".join(kept)
+        separator = "" if not prefix or prefix.endswith(("\n", "\r")) else "\n"
+        protected = prefix + separator + self.LOCAL_AUDIT_IGNORE + "\n"
+        changed = protected != current
+        if changed:
+            _atomic_write(ignore, protected)
+        self.local_protection = {
+            "status": "protected",
+            "ignore_file": str(ignore.relative_to(self.contracts.base)),
+            "pattern": self.LOCAL_AUDIT_IGNORE,
+            "changed": changed,
+        }
+        return self.local_protection
 
     def save(self, value):
         """Caller holds contracts then policy lock; no network in this method."""

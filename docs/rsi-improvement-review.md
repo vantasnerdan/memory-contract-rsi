@@ -45,7 +45,7 @@ No canonical policy is automatically changed by audits, trials, interpretation o
 
 ## Implementation and independent review
 
-All top-four mechanisms are implemented. The Host module is **0.5.0**, the bundled CLI **0.6.0**, and the preflight/evaluation rubric is `memory-rsi/2`. New responsibilities live in focused instruction-audit, trial-review, deterministic trial-schema/statistics, assessment-retention and contract-output modules; canonical policy and pinned template requirements are unchanged.
+All top-four mechanisms are implemented. The Host module and bundled CLI are **0.7.1**, and the preflight/evaluation rubric remains `memory-rsi/2`. Instruction discovery/audit schemas advance independently: exact capture and evidence-grounded staged mapping live in `rsi-source-discovery`, `rsi-instruction-feedback`, `rsi-instruction-stages` and `rsi-instructions`; trial review, deterministic trial-schema/statistics, assessment retention and contract output remain focused modules. Canonical policy and pinned template requirements are unchanged.
 
 Two scoped reviewers inspected the changes and reproduced regressions. Independent review caught and closed two additional defects before delivery: disabled oversized audits/trials could attempt to persist more than the 128 KiB record budget, and regex coercion admitted non-string source IDs. Shared status-independent input retention now preserves an explicit digest/omission; number/array/null IDs reject. An independent rerun reduced the failing 165,057-byte disabled audit to a 957-byte honest `disabled/not-assessed` record with no credential access. No remaining reproduced P1/P2 blocker was reported in the inspected scope. Review is not a security proof.
 
@@ -53,8 +53,8 @@ Two scoped reviewers inspected the changes and reproduced regressions. Independe
 
 The full frozen candidate passed:
 
-- **337 Node tests**, including actual registered-tool → real Python CLI integration with mocked transport.
-- **1,156 Python tests**; only the existing pytest-asyncio fixture-scope deprecation warning appeared.
+- **367 Node tests**, including actual registered-tool → real Python CLI staged-capture integration with mocked transport.
+- **1,157 Python tests**; only the existing pytest-asyncio fixture-scope deprecation warning appeared.
 - Python AST parsing of **41 modules** and real pylsp/TypeScript LSP document-symbol queries across **34 selected modules**.
 - `git diff --check`, package dry-run, packaged Host import, and private CLI upgrade/version check.
 
